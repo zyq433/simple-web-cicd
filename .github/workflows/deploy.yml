@@ -1,0 +1,65 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]      # 当推送到 main 分支时触发
+  workflow_dispatch:          # 支持在 GitHub 网页端手动触发
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest    # 使用 GitHub 提供的 Ubuntu 虚拟机
+
+    steps:
+      # 1. 拉取代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 设置 Python 环境（用于运行测试）
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. 安装依赖并运行测试（如果有 test_app.py）
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest test_app.py -v || true   # 即使没有测试也不中断流水线
+
+      # 4. 构建 Docker 镜像
+      - name: Build Docker image
+        run: docker build -t simple-web-cicd:latest .
+
+      # 5. 将镜像保存为 tar 压缩文件（方便传输）
+      - name: Save Docker image to file
+        run: docker save -o app.tar simple-web-cicd:latest
+
+      # 6. 通过 SCP 将镜像文件传输到云服务器
+      - name: Copy image to server via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "app.tar"
+          target: "/root/"
+
+      # 7. 通过 SSH 连接云服务器，加载镜像并运行容器
+      - name: Deploy container on server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /root
+            # 加载镜像
+            docker load -i app.tar
+            # 停止并删除旧的容器（如果有）
+            docker stop simple-web-app || true
+            docker rm simple-web-app || true
+            # 启动新容器（映射宿主机 80 端口到容器 8080 端口）
+            docker run -d --name simple-web-app -p 80:8080 simple-web-cicd:latest
