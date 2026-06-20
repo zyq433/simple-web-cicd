@@ -32,6 +32,9 @@ jobs:
       - name: Save Docker image to file
         run: docker save -o app.tar simple-web-cicd:latest
 
+      - name: Fix permissions
+        run: chmod 644 app.tar
+
       - name: Copy image to server via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -40,6 +43,8 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "app.tar"
           target: "/home/ubuntu/"
+          overwrite: true
+          debug: true
 
       - name: Deploy container on server via SSH
         uses: appleboy/ssh-action@v1.0.3
