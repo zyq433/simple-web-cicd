@@ -33,31 +33,28 @@ jobs:
         run: |
           docker save -o app.tar simple-web-cicd:latest
           chmod 644 app.tar
-          # 复制到临时目录，避免权限问题
-          cp app.tar /tmp/app.tar
 
-      - name: Copy image to server via SCP
+      - name: Copy image to server via SCP (using password)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "/tmp/app.tar"
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "app.tar"
           target: "/home/ubuntu/"
           overwrite: true
           debug: true
 
-      - name: Deploy container on server via SSH
+      - name: Deploy container on server via SSH (using password)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /home/ubuntu
-            ls -la
-            sudo /usr/bin/docker load -i app.tar
-            sudo /usr/bin/docker stop simple-web-app || true
-            sudo /usr/bin/docker rm simple-web-app || true
-            sudo /usr/bin/docker run -d --name simple-web-app -p 80:8080 simple-web-cicd:latest
-            sudo /usr/bin/docker ps
+            sudo docker load -i app.tar
+            sudo docker stop simple-web-app || true
+            sudo docker rm simple-web-app || true
+            sudo docker run -d --name simple-web-app -p 80:8080 simple-web-cicd:latest
+            sudo docker ps
